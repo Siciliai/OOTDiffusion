@@ -62,8 +62,8 @@ def gen_trying_image(model_data, cloth_data, mask_data):
     mask_gray = Image.fromarray(mask_gray_array)
 
     # mask, mask_gray = get_mask_location(model_type, category_dict_utils[category], model_parse, keypoints)
-    # mask = mask.resize((768, 1024), Image.NEAREST)
-    # mask_gray = mask_gray.resize((768, 1024), Image.NEAREST)
+    mask = mask.resize((768, 1024), Image.NEAREST)
+    mask_gray = mask_gray.resize((768, 1024), Image.NEAREST)
 
     masked_vton_img = Image.composite(mask_gray, model_img, mask)
     # masked_vton_img.save('./images_output/mask.jpg')
