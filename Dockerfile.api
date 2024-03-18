@@ -1,0 +1,9 @@
+FROM registry-vpc.cn-shenzhen.aliyuncs.com/siciliai-personal/ootdiffusion:test 
+
+WORKDIR /app
+
+COPY ./run/api.py /app/run/api.py
+
+WORKDIR /app/run
+
+CMD ["uvicorn", "--host", "0.0.0.0", "--port", "7866", "api:app"]
