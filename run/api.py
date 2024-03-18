@@ -3,6 +3,7 @@ import io
 from pathlib import Path
 import sys
 
+import torch
 from PIL import Image
 import numpy as np
 
@@ -19,7 +20,7 @@ except ModuleNotFoundError:
 from ootd.inference_ootd_hd import OOTDiffusionHD
 from ootd.inference_ootd_dc import OOTDiffusionDC
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -46,11 +47,17 @@ else:
     raise ValueError("model_type must be \'hd\' or \'dc\'!")
 
 
+class OOTDGenError(Exception):
+    pass
+
+
 def gen_trying_image(model_data, cloth_data, mask_data):
     """
     生成试穿图片
     """
     cloth_img = Image.open(io.BytesIO(base64.b64decode(cloth_data))).resize((768, 1024))
+    cloth_img = cloth_img.convert('RGB')
+
     model_img = Image.open(io.BytesIO(base64.b64decode(model_data))).resize((768, 1024))
     keypoints = openpose_model(model_img.resize((384, 512)))
     model_parse, _ = parsing_model(model_img.resize((384, 512)))
@@ -68,18 +75,24 @@ def gen_trying_image(model_data, cloth_data, mask_data):
     masked_vton_img = Image.composite(mask_gray, model_img, mask)
     # masked_vton_img.save('./images_output/mask.jpg')
 
-    images = model(
-        model_type=model_type,
-        category=category_dict[category],
-        image_garm=cloth_img,
-        image_vton=masked_vton_img,
-        mask=mask,
-        image_ori=model_img,
-        num_samples=n_samples,
-        num_steps=n_steps,
-        image_scale=image_scale,
-        seed=seed,
-    )
+    try:
+        images = model(
+            model_type=model_type,
+            category=category_dict[category],
+            image_garm=cloth_img,
+            image_vton=masked_vton_img,
+            mask=mask,
+            image_ori=model_img,
+            num_samples=n_samples,
+            num_steps=n_steps,
+            image_scale=image_scale,
+            seed=seed,
+        )
+    except Exception as e:
+        print(f"ootd model gen image error: {e}")
+        torch.cuda.empty_cache()
+        print(f"cuda empty_cache done")
+        raise OOTDGenError(e)
 
     # image_idx = 0
     # for image in images:
@@ -105,7 +118,11 @@ class GenRequest(BaseModel):
 
 @app.post(path="/process", summary="生成试穿图片")
 def process(req: GenRequest):
-    result = gen_trying_image(req.model, req.cloth, req.mask)
+    try:
+        result = gen_trying_image(req.model, req.cloth, req.mask)
+    except OOTDGenError as e:
+        print("gen trying image error")
+        raise HTTPException(status_code=500, detail=f"{e}")
 
     response = {
         "image": result
